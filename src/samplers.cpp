@@ -518,6 +518,7 @@ bool Sampler::SampleMesh(
   };
   std::vector<Tri> tris;
   double total_area = 0.0;
+  unsigned int non_triangle_submeshes = 0;
 
   for (unsigned int s = 0; s < mesh->SubMeshCount(); ++s) {
     auto submesh = mesh->SubMeshByIndex(s).lock();
@@ -528,6 +529,7 @@ bool Sampler::SampleMesh(
       continue;
     }
     if (submesh->SubMeshPrimitiveType() != gz::common::SubMesh::TRIANGLES) {
+      ++non_triangle_submeshes;
       continue;
     }
     for (unsigned int i = 0; i + 2 < submesh->IndexCount(); i += 3) {
@@ -541,6 +543,11 @@ bool Sampler::SampleMesh(
         tris.push_back(t);
       }
     }
+  }
+  if (non_triangle_submeshes > 0) {
+    std::cerr << "[sdf2map] WARNING: skipped " << non_triangle_submeshes
+              << " non-triangle submesh(es) (line strips/points etc.) in: "
+              << path << std::endl;
   }
   if (tris.empty()) {
     std::cerr << "[sdf2map] WARNING: mesh has no triangles: " << path
