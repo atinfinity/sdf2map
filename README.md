@@ -142,6 +142,31 @@ directly in `nav2_map_server`.
   `--exclude 'Person|MaleVisitor'`.
 - The output is deterministic for a given `--seed`.
 
+## Current limitations
+
+- **Heightmaps**: only grayscale image heightmaps are supported; DEM /
+  GeoTIFF terrains are skipped with a warning.
+- **Static snapshot**: every model (static or not) is sampled at its
+  initial pose. Joint states are not simulated, and `<actor>` entities
+  are ignored by design.
+- **Multi-world files**: only the first `<world>` in a file is
+  processed (a NOTE is printed).
+- **Planes are finite**: a `<plane>` is sampled over its declared
+  `<size>` only. The SDF default is 1×1 m, so a world relying on an
+  implicitly infinite ground plane produces just a small patch.
+- **model:// URIs are not auto-downloaded**: only full Fuel URLs
+  (`https://fuel.gazebosim.org/...`) trigger a download; `model://`
+  names must resolve via `--model-path`, the environment, or the cache.
+- **Meshes**: only triangle submeshes are sampled; strip / fan / line /
+  point submeshes are skipped with a warning.
+- **Transparency detection** uses the `<transparency>` element only;
+  PBR material alpha or texture transparency is not inspected.
+- **Occupancy grid** cells are binary occupied/free — no unknown (gray)
+  cells are produced, since the geometry is fully known.
+- **Geometry only**: PCD output contains XYZ points; no color,
+  intensity, or normals. Very thin or tiny features may need a higher
+  `--density` to be represented well.
+
 ## Tests
 
 ```bash
