@@ -80,6 +80,50 @@ ros2 run sdf2map sdf2map \
 100×100m の ground plane を持つ world では `--grid-bounds slice` を
 使うと障害物範囲+マージンのコンパクトな地図になります。
 
+## 実行例
+
+### 同梱テストworld
+
+`worlds/test_world.sdf` は全プリミティブ・メッシュ・ネストモデル
+(relative_toフレーム)・周囲壁を含みます:
+
+```bash
+ros2 run sdf2map sdf2map \
+  --input worlds/test_world.sdf \
+  --output test_map.pcd \
+  --occupancy-grid test_map.yaml
+```
+
+| 点群地図 (PCD) | 占有格子地図 (PGM + YAML) |
+|---|---|
+| <img src="docs/images/test_world_cloud.png" width="420"/> | <img src="docs/images/test_world_grid.png" width="330"/> |
+
+### 倉庫world
+
+入力は
+[kachaka_ros2_dev_kit](https://github.com/CyberAgentAILab/kachaka_ros2_dev_kit)
+の `warehouse.sdf` (Fuelモデルは自動ダウンロード)。この world の
+Fuel モデルは collision が貧弱なため `--geometry visual` を使い、
+`--z-max` で屋根を除去、`--exclude` で人物モデルを除外しています:
+
+```bash
+ros2 run sdf2map sdf2map \
+  --input warehouse.sdf \
+  --output warehouse.pcd \
+  --geometry visual --z-max 8 \
+  --exclude 'Person|MaleVisitor|Casual' \
+  --voxel 0.05 \
+  --occupancy-grid warehouse.yaml
+```
+
+| 点群地図 (PCD) | 占有格子地図 (PGM + YAML) |
+|---|---|
+| <img src="docs/images/warehouse_cloud.png" width="420"/> | <img src="docs/images/warehouse_grid.png" width="240"/> |
+
+この地図に対し PCL の NDT は初期誤差 0.5m / 8.6° から
+9.5mm / 0.03° まで収束し、格子地図は `nav2_map_server` で
+そのまま読み込めます。
+
 ## 実運用のヒント
 
 - **collision が床 plane 1 枚だけの world がある** (例: Fuel の Depot

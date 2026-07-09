@@ -88,6 +88,50 @@ every other in-bounds cell as free (the geometry is fully known, so no
 unknown cells are produced). For worlds with a huge ground plane, use
 `--grid-bounds slice` to get a compact map around the obstacles.
 
+## Examples
+
+### Bundled test world
+
+`worlds/test_world.sdf` contains every supported primitive, a mesh, a
+nested model with `relative_to` frames, and perimeter walls:
+
+```bash
+ros2 run sdf2map sdf2map \
+  --input worlds/test_world.sdf \
+  --output test_map.pcd \
+  --occupancy-grid test_map.yaml
+```
+
+| Point cloud (PCD) | Occupancy grid (PGM + YAML) |
+|---|---|
+| <img src="docs/images/test_world_cloud.png" width="420"/> | <img src="docs/images/test_world_grid.png" width="330"/> |
+
+### Warehouse world
+
+Input: `warehouse.sdf` from
+[kachaka_ros2_dev_kit](https://github.com/CyberAgentAILab/kachaka_ros2_dev_kit)
+(models fetched from Fuel automatically). The world's Fuel models are
+mostly visual-only, so `--geometry visual` is used; `--z-max` crops the
+roof and `--exclude` removes the person models:
+
+```bash
+ros2 run sdf2map sdf2map \
+  --input warehouse.sdf \
+  --output warehouse.pcd \
+  --geometry visual --z-max 8 \
+  --exclude 'Person|MaleVisitor|Casual' \
+  --voxel 0.05 \
+  --occupancy-grid warehouse.yaml
+```
+
+| Point cloud (PCD) | Occupancy grid (PGM + YAML) |
+|---|---|
+| <img src="docs/images/warehouse_cloud.png" width="420"/> | <img src="docs/images/warehouse_grid.png" width="240"/> |
+
+PCL's NDT recovers a simulated sensor pose on this map with 9.5 mm /
+0.03° error from a 0.5 m / 8.6° initial offset, and the grid loads
+directly in `nav2_map_server`.
+
 ## Practical notes
 
 - **Some worlds only have a floor plane as collision** (e.g. the Fuel
