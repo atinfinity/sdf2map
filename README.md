@@ -157,7 +157,7 @@ part of the tests.
 ## Roadmap
 
 Planned features are complete. Pending decisions and optional future
-work are tracked in [docs/ROADMAP.md](docs/ROADMAP.md) (Japanese).
+work are tracked in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

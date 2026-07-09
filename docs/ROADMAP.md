@@ -1,46 +1,51 @@
-# ロードマップ / 残作業 (Roadmap)
+# Roadmap / Remaining Work
 
-最終更新: 2026-07-09
+Last updated: 2026-07-09
 
-当初計画した機能(点群地図生成、Nav2占有格子、全ジオメトリ対応、
-Fuel自動ダウンロード、NDT検証、lint+CI)は**すべて実装・検証済み**です。
-本ドキュメントは残っている判断事項と、必要になった時点で着手する
-任意項目を記録します。
+Everything originally planned (point cloud map generation, Nav2
+occupancy grids, full geometry coverage, Fuel auto-download, NDT
+validation, lint + CI) is **implemented and verified**. This document
+tracks the one pending decision and the optional items to pick up when
+their trigger arrives.
 
-## 判断待ち
+## Pending decision
 
-### 1. 方式2 (シミュレーションスキャン方式) の実装要否
+### 1. Whether to implement "method 2" (simulated-scan mapping)
 
-Gazebo上で仮想LiDARを走らせてスキャンを蓄積する代替方式。
+An alternative approach that accumulates scans from a virtual lidar
+driven through the world in Gazebo.
 
-- 現状: 方式1 (オフライン幾何サンプリング) の地図で PCL NDT が
-  初期誤差 0.5m / 8.6° から 9.5mm / 0.03° に収束することを
-  実world (kachaka warehouse) で確認済み。
-- 推奨: **実装しない**。方式2の利点 (オクルージョン整合性) は
-  NDTでは実害がなく、点密度の距離依存・走査計画・実行コストの
-  デメリットが上回るため。
-- NDTの実機・実運用で問題が出た場合のみ再検討する。
+- Status: with method 1 (offline geometric sampling), PCL NDT converges
+  from a 0.5 m / 8.6° initial offset to 9.5 mm / 0.03° error on a real
+  world (kachaka warehouse).
+- Recommendation: **do not implement**. Method 2's advantage
+  (occlusion-consistent maps) does not help NDT in practice, while its
+  drawbacks (range-dependent point density, scan-pose planning, runtime
+  cost) remain.
+- Revisit only if NDT underperforms in on-robot deployments.
 
-## 任意項目 (必要になったら着手)
+## Optional items (pick up when needed)
 
-| # | 項目 | 着手の目安 | メモ |
+| # | Item | When to start | Notes |
 |---|---|---|---|
-| 2 | `v0.1.0` リリースタグ | いつでも | package.xml のバージョンと一致させて GitHub Release を作成 |
-| 3 | DEM / GeoTIFF heightmap 対応 | 屋外・実地形worldを扱うとき | gz-common の `Dem` クラス (GDAL) を利用。現在は画像heightmapのみ対応、未対応形式は警告表示 |
-| 4 | ライセンスヘッダの著作権者名変更 | 公開名義を変えたいとき | 現在は全ソース `Copyright 2026 atinfinity`。一括置換で対応可能 |
-| 5 | 占有格子の unknown セル生成 | Nav2 で建物外を unknown 扱いしたいとき | 現在は範囲内を occupied/free の2値で出力。床ジオメトリの xy 射影判定が必要 |
-| 6 | `--world-name` オプション | 複数worldを含むSDFを扱うとき | 現在は先頭worldのみ処理し NOTE を表示 |
-| 7 | CI の拡張 | ビルド時間や対象distroが増えたとき | apt キャッシュ、ROS Rolling のビルドマトリクス追加など |
-| 8 | xmllint の復帰 | CI 専用 lint を分けるとき | package.xml スキーマ取得がオフラインでハングするため除外中。ネットワークのある CI 上でのみ実行する形なら復帰可能 |
+| 2 | Tag a `v0.1.0` release | anytime | Create a GitHub Release matching the package.xml version |
+| 3 | DEM / GeoTIFF heightmap support | when outdoor / real-terrain worlds appear | Use gz-common's `Dem` class (GDAL). Only image heightmaps are supported today; unsupported formats emit a warning |
+| 4 | Change the copyright holder in license headers | when the publishing identity changes | All sources currently say `Copyright 2026 atinfinity`; a bulk replace suffices |
+| 5 | Unknown cells in the occupancy grid | when Nav2 should treat out-of-building areas as unknown | Output is currently binary occupied/free within bounds; requires an xy-projection test against floor geometry |
+| 6 | `--world-name` option | when SDF files with multiple worlds appear | Currently the first world is processed and a NOTE is printed |
+| 7 | CI extensions | when build times grow or more distros are targeted | apt caching, a ROS Rolling build matrix, etc. |
+| 8 | Reinstate xmllint | when splitting CI-only lints | Removed because fetching the package.xml schema hangs offline; could run only on networked CI |
 
-## 実装済み機能の経緯 (参考)
+## History of implemented work (reference)
 
-- 2026-07-09: 初版公開。SDF→PCD/占有格子のコア、全プリミティブ+
-  mesh+heightmap+polyline対応、`relative_to` フレーム解決、
-  Fuel自動ダウンロード、`--exclude`/`--transparency-threshold`/
-  `--grid-close` 等のオプション、NDT回帰テスト、GitHub Actions CI。
-- 設計判断: `<actor>` は動的物体のため**仕様として地図に含めない**。
-- 既知の教訓: gz-math7 の `Pose3d::operator*` は行列規約
-  (親×子)。Gazebo Classic と逆であり、回転した子+平行移動した親の
-  組み合わせでのみ発現するバグを回帰テストで防止している
-  (`test/test_world_sampler.cpp`)。
+- 2026-07-09: initial release. SDF → PCD / occupancy grid core, all
+  primitives + mesh + heightmap + polyline, `relative_to` frame
+  resolution, Fuel auto-download, `--exclude` /
+  `--transparency-threshold` / `--grid-close` options, NDT regression
+  test, GitHub Actions CI.
+- Design decision: `<actor>` entities are **never mapped by design** —
+  they are dynamic objects.
+- Lesson learned: gz-math7's `Pose3d::operator*` uses the matrix
+  convention (parent × child), the opposite of Gazebo Classic. The bug
+  only manifests with a rotated child under a translated parent; a
+  regression test guards it (`test/test_world_sampler.cpp`).
