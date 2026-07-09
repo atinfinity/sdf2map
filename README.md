@@ -154,6 +154,11 @@ closing, and an NDT registration check that recovers a known sensor pose
 on the generated map. Linters (uncrustify, cpplint, lint_cmake) run as
 part of the tests.
 
+## Roadmap
+
+Planned features are complete. Pending decisions and optional future
+work are tracked in [docs/ROADMAP.md](docs/ROADMAP.md) (Japanese).
+
 ## License
 
 Apache-2.0

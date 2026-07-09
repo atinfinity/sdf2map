@@ -145,3 +145,8 @@ colcon test --packages-select sdf2map && colcon test-result --verbose
 
 サンプル world (`worlds/test_world.sdf`) には全プリミティブ・メッシュ・
 ネストモデル・relative_to フレームが含まれており、動作確認に使えます。
+
+## ロードマップ
+
+計画済み機能は実装完了しています。判断待ち事項と任意の将来項目は
+[docs/ROADMAP.md](docs/ROADMAP.md) を参照してください。
