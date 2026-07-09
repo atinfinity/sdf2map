@@ -51,6 +51,8 @@ public:
     const std::string & uri, const std::string & base_dir_override = "") const;
 
 private:
+  std::string ResolveRelative(
+    const std::string & rel, const std::string & base_dir_override) const;
   std::string ResolveModelUri(const std::string & uri) const;
   std::string ResolveFuelUrl(const std::string & uri) const;
   std::string FindInFuelCache(

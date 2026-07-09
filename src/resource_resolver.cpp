@@ -129,8 +129,13 @@ std::string ResourceResolver::Resolve(
     return ResolveModelUri(uri.substr(8));
   }
   if (uri.rfind("file://", 0) == 0) {
-    std::string path = uri.substr(7);
-    return fs::exists(path) ? path : std::string();
+    const std::string path = UrlDecode(uri.substr(7));
+    if (fs::path(path).is_absolute()) {
+      return fs::exists(path) ? path : std::string();
+    }
+    // Gazebo Classic convention: file://<relative path> (e.g.
+    // file://media/...) — resolve like a plain relative path.
+    return ResolveRelative(path, base_dir_override);
   }
   if (uri.rfind("https://", 0) == 0 || uri.rfind("http://", 0) == 0) {
     return ResolveFuelUrl(uri);
@@ -138,16 +143,31 @@ std::string ResourceResolver::Resolve(
   if (fs::path(uri).is_absolute()) {
     return fs::exists(uri) ? uri : std::string();
   }
-  // Plain relative path: relative to the directory of the file that
-  // referenced it (an included model.sdf), then to the input SDF's dir.
+  return ResolveRelative(uri, base_dir_override);
+}
+
+std::string ResourceResolver::ResolveRelative(
+  const std::string & rel, const std::string & base_dir_override) const
+{
+  // The directory of the file that referenced the resource (an included
+  // model.sdf), then the input SDF's directory, then the search paths.
   if (!base_dir_override.empty()) {
-    fs::path candidate = fs::path(base_dir_override) / uri;
+    fs::path candidate = fs::path(base_dir_override) / rel;
     if (fs::exists(candidate)) {
       return candidate.string();
     }
   }
-  fs::path candidate = fs::path(base_dir_) / uri;
-  return fs::exists(candidate) ? candidate.string() : std::string();
+  fs::path candidate = fs::path(base_dir_) / rel;
+  if (fs::exists(candidate)) {
+    return candidate.string();
+  }
+  for (const auto & dir : search_dirs_) {
+    candidate = fs::path(dir) / rel;
+    if (fs::exists(candidate)) {
+      return candidate.string();
+    }
+  }
+  return std::string();
 }
 
 std::string ResourceResolver::ResolveModelUri(const std::string & rest) const

@@ -69,6 +69,27 @@ TEST_F(ResourceResolverTest, RelativePathAgainstBaseDir)
   EXPECT_TRUE(resolver.Resolve("meshes/missing.stl").empty());
 }
 
+TEST_F(ResourceResolverTest, FileUriAbsoluteAndRelative)
+{
+  sdf2map::ResourceResolver resolver(base_.string(), {}, false);
+  const std::string abs_path = (base_ / "meshes" / "part.stl").string();
+
+  EXPECT_EQ(resolver.Resolve("file://" + abs_path), abs_path);
+  // Gazebo Classic style relative form, resolved against the base dir
+  EXPECT_EQ(resolver.Resolve("file://meshes/part.stl"), abs_path);
+  EXPECT_TRUE(resolver.Resolve("file://meshes/missing.stl").empty());
+}
+
+TEST_F(ResourceResolverTest, RelativePathAgainstExtraSearchDirs)
+{
+  // A resource that only exists under a --model-path directory
+  sdf2map::ResourceResolver resolver(
+    "/nonexistent_base", {base_.string()}, false);
+  EXPECT_EQ(
+    resolver.Resolve("meshes/part.stl"),
+    (base_ / "meshes" / "part.stl").string());
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
