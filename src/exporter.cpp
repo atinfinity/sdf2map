@@ -18,6 +18,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -202,7 +203,10 @@ void ExportOccupancyGrid(const CloudXYZ & cloud, const Options & opts)
   if (!yaml) {
     throw std::runtime_error("cannot open " + yaml_path.string());
   }
-  yaml << "image: " << pgm_path.filename().string() << "\n"
+  // Full double precision so the grid origin aligns exactly with the
+  // cell rasterization above even for large world coordinates
+  yaml << std::setprecision(15)
+       << "image: " << pgm_path.filename().string() << "\n"
        << "mode: trinary\n"
        << "resolution: " << res << "\n"
        << "origin: [" << origin_x << ", " << origin_y << ", 0.0]\n"
