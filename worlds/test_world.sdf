@@ -1,0 +1,194 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="sdf2map_test">
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>20 20</size>
+            </plane>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="box_wall">
+      <static>true</static>
+      <pose>3 0 0.5 0 0 0.5236</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box><size>4 0.2 1</size></box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box><size>4 0.2 1</size></box>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pillar">
+      <static>true</static>
+      <pose>-2 2 1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <cylinder><radius>0.3</radius><length>2</length></cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder><radius>0.3</radius><length>2</length></cylinder>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="ball">
+      <static>true</static>
+      <pose>-2 -2 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <sphere><radius>0.5</radius></sphere>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <sphere><radius>0.5</radius></sphere>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <model name="pylon">
+      <static>true</static>
+      <pose>0 -3 0 0 0 0</pose>
+      <link name="link">
+        <pose>0 0 0.5 0 0 0</pose>
+        <collision name="collision">
+          <geometry>
+            <mesh>
+              <uri>meshes/pyramid.stl</uri>
+              <scale>1 1 1</scale>
+            </mesh>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <mesh>
+              <uri>meshes/pyramid.stl</uri>
+            </mesh>
+          </geometry>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Nested model + relative_to pose to exercise frame semantics -->
+    <model name="shelf_unit">
+      <static>true</static>
+      <pose>2 3 0 0 0 1.5708</pose>
+      <model name="shelf_base">
+        <pose>0 0 0.25 0 0 0</pose>
+        <link name="link">
+          <collision name="collision">
+            <geometry>
+              <box><size>2 0.6 0.5</size></box>
+            </geometry>
+          </collision>
+        </link>
+      </model>
+      <frame name="top_of_base" attached_to="shelf_base">
+        <pose relative_to="shelf_base">0 0 0.5 0 0 0</pose>
+      </frame>
+      <model name="shelf_top">
+        <pose relative_to="top_of_base">0 0 0.25 0 0 0</pose>
+        <link name="link">
+          <collision name="collision">
+            <geometry>
+              <box><size>2 0.6 0.5</size></box>
+            </geometry>
+          </collision>
+        </link>
+      </model>
+    </model>
+
+    <model name="capsule_obstacle">
+      <static>true</static>
+      <pose>4 -2 0.8 1.5708 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <capsule><radius>0.2</radius><length>1</length></capsule>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Perimeter walls: make the world a closed room so registration
+         tests (NDT) are well constrained, like real indoor worlds -->
+    <model name="perimeter_walls">
+      <static>true</static>
+      <link name="link">
+        <collision name="north">
+          <pose>0 10 1 0 0 0</pose>
+          <geometry><box><size>20 0.2 2</size></box></geometry>
+        </collision>
+        <collision name="south">
+          <pose>0 -10 1 0 0 0</pose>
+          <geometry><box><size>20 0.2 2</size></box></geometry>
+        </collision>
+        <collision name="east">
+          <pose>10 0 1 0 0 0</pose>
+          <geometry><box><size>0.2 20 2</size></box></geometry>
+        </collision>
+        <collision name="west">
+          <pose>-10 0 1 0 0 0</pose>
+          <geometry><box><size>0.2 20 2</size></box></geometry>
+        </collision>
+      </link>
+    </model>
+
+    <!-- Rotated collision under a translated parent: regression for the
+         gz-math7 pose composition order (parent * child, matrix-style) -->
+    <model name="offset_rotated">
+      <static>true</static>
+      <pose>5 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <pose>0 0 0 0 0 1.5708</pose>
+          <geometry>
+            <box><size>2 0.5 1</size></box>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+    <model name="rock">
+      <static>true</static>
+      <pose>-4 0 0.3 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <ellipsoid><radii>0.6 0.4 0.3</radii></ellipsoid>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+
+  </world>
+</sdf>
