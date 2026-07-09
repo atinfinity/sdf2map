@@ -193,6 +193,10 @@ void ExportOccupancyGrid(const CloudXYZ & cloud, const Options & opts)
       width);
   }
   pgm.close();
+  if (!pgm) {
+    throw std::runtime_error(
+            "failed to write " + pgm_path.string() + " (disk full?)");
+  }
 
   std::ofstream yaml(yaml_path);
   if (!yaml) {
@@ -206,6 +210,10 @@ void ExportOccupancyGrid(const CloudXYZ & cloud, const Options & opts)
        << "occupied_thresh: 0.65\n"
        << "free_thresh: 0.25\n";
   yaml.close();
+  if (!yaml) {
+    throw std::runtime_error(
+            "failed to write " + yaml_path.string() + " (disk full?)");
+  }
 
   std::cout << "[sdf2map] occupancy grid: " << width << "x" << height
             << " cells (" << res << " m/cell), " << occupied_cells
