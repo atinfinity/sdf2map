@@ -127,6 +127,42 @@ void ExportOccupancyGrid(const CloudXYZ & cloud, const Options & opts)
     }
   }
 
+  // Morphological closing (dilate then erode) to fill speckle holes the
+  // stochastic sampling leaves inside obstacle footprints
+  if (opts.grid_close > 0) {
+    auto pass = [&](std::vector<uint8_t> & g, uint8_t from, uint8_t to) {
+        std::vector<uint8_t> src = g;
+        for (int y = 0; y < height; ++y) {
+          for (int x = 0; x < width; ++x) {
+            if (src[static_cast<size_t>(y) * width + x] != from) {
+              continue;
+            }
+            bool hit = false;
+            for (int dy = -1; dy <= 1 && !hit; ++dy) {
+              for (int dx = -1; dx <= 1 && !hit; ++dx) {
+                const int nx = x + dx, ny = y + dy;
+                hit = nx >= 0 && nx < width && ny >= 0 && ny < height &&
+                  src[static_cast<size_t>(ny) * width + nx] == to;
+              }
+            }
+            if (hit) {
+              g[static_cast<size_t>(y) * width + x] = to;
+            }
+          }
+        }
+      };
+    for (int i = 0; i < opts.grid_close; ++i) {
+      pass(grid, kFree, kOccupied);  // dilate obstacles
+    }
+    for (int i = 0; i < opts.grid_close; ++i) {
+      pass(grid, kOccupied, kFree);  // erode back
+    }
+    occupied_cells = 0;
+    for (uint8_t v : grid) {
+      occupied_cells += v == kOccupied ? 1 : 0;
+    }
+  }
+
   const fs::path yaml_path = fs::path(opts.grid_yaml);
   fs::path pgm_path = yaml_path;
   pgm_path.replace_extension(".pgm");

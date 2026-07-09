@@ -2,8 +2,10 @@
 
 #include <filesystem>
 #include <iostream>
+#include <regex>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <sdf/Collision.hh>
 #include <sdf/Error.hh>
@@ -44,12 +46,25 @@ public:
   WorldSampler(const Options & opts, Sampler & sampler, SampleStats & stats)
   : opts_(opts), sampler_(sampler), stats_(stats)
   {
+    for (const auto & pattern : opts.exclude_patterns) {
+      exclude_.emplace_back(pattern);
+    }
   }
 
   void ProcessModel(
     const sdf::Model & model, const gz::math::Pose3d & parent_world,
     CloudXYZ & out)
   {
+    for (const auto & re : exclude_) {
+      if (std::regex_search(model.Name(), re)) {
+        if (opts_.verbose) {
+          std::cout << "[sdf2map] model '" << model.Name()
+                    << "' excluded by pattern" << std::endl;
+        }
+        ++stats_.excluded_models;
+        return;
+      }
+    }
     ++stats_.models;
     // gz-math7 Pose3 composes matrix-style: X_OQ = X_OP * X_PQ
     // (parent-to-world on the LEFT, child-in-parent on the RIGHT).
@@ -66,6 +81,10 @@ public:
       if (opts_.use_visual) {
         for (uint64_t v = 0; v < link->VisualCount(); ++v) {
           const sdf::Visual * vis = link->VisualByIndex(v);
+          if (vis->Transparency() >= opts_.transparency_threshold) {
+            ++stats_.skipped;
+            continue;
+          }
           ProcessGeometry(*vis->Geom(), link_world * ResolvePose(*vis), out);
         }
       } else {
@@ -89,12 +108,6 @@ private:
       ++stats_.skipped;
       return;
     }
-    if (geom.Type() == sdf::GeometryType::HEIGHTMAP) {
-      std::cerr << "[sdf2map] WARNING: heightmap geometry is not supported "
-                   "yet, skipping" << std::endl;
-      ++stats_.skipped;
-      return;
-    }
     if (sampler_.SampleGeometry(geom, world_pose, out)) {
       ++stats_.geometries;
     } else {
@@ -105,6 +118,7 @@ private:
   const Options & opts_;
   Sampler & sampler_;
   SampleStats & stats_;
+  std::vector<std::regex> exclude_;
 };
 
 }  // namespace

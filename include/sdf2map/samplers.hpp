@@ -43,7 +43,13 @@ private:
   void SamplePlane(const gz::math::Vector3d & normal,
     const gz::math::Vector2d & size,
     const gz::math::Pose3d & pose, CloudXYZ & out);
+  void SampleCone(double radius, double length,
+    const gz::math::Pose3d & pose, CloudXYZ & out);
+  void SamplePolyline(const sdf::Geometry & geom,
+    const gz::math::Pose3d & pose, CloudXYZ & out);
   bool SampleMesh(const sdf::Geometry & geom,
+    const gz::math::Pose3d & pose, CloudXYZ & out);
+  bool SampleHeightmap(const sdf::Geometry & geom,
     const gz::math::Pose3d & pose, CloudXYZ & out);
 
   void SampleRect(double sx, double sy, const gz::math::Pose3d & rect_pose,

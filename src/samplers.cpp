@@ -1,20 +1,25 @@
 #include "sdf2map/samplers.hpp"
 
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <vector>
 
+#include <gz/common/Image.hh>
 #include <gz/common/Mesh.hh>
 #include <gz/common/MeshManager.hh>
 #include <gz/common/SubMesh.hh>
 #include <sdf/Box.hh>
 #include <sdf/Capsule.hh>
+#include <sdf/Cone.hh>
 #include <sdf/Cylinder.hh>
 #include <sdf/Element.hh>
 #include <sdf/Ellipsoid.hh>
+#include <sdf/Heightmap.hh>
 #include <sdf/Mesh.hh>
 #include <sdf/Plane.hh>
+#include <sdf/Polyline.hh>
 #include <sdf/Sphere.hh>
 
 namespace sdf2map
@@ -55,8 +60,18 @@ bool Sampler::SampleGeometry(
         geom.PlaneShape()->Normal(), geom.PlaneShape()->Size(),
         world_pose, out);
       return true;
+    case sdf::GeometryType::CONE:
+      SampleCone(
+        geom.ConeShape()->Radius(), geom.ConeShape()->Length(),
+        world_pose, out);
+      return true;
+    case sdf::GeometryType::POLYLINE:
+      SamplePolyline(geom, world_pose, out);
+      return true;
     case sdf::GeometryType::MESH:
       return SampleMesh(geom, world_pose, out);
+    case sdf::GeometryType::HEIGHTMAP:
+      return SampleHeightmap(geom, world_pose, out);
     default:
       return false;
   }
@@ -226,6 +241,231 @@ void Sampler::SamplePlane(
   SampleRect(
     size.X(), size.Y(), gz::math::Pose3d(gz::math::Vector3d::Zero, rot),
     pose, out);
+}
+
+void Sampler::SampleCone(
+  double radius, double length, const gz::math::Pose3d & pose, CloudXYZ & out)
+{
+  // Apex at +length/2, base disc at -length/2 (SDF convention)
+  const double slant = std::sqrt(radius * radius + length * length);
+  const size_t n_side = CountFor(GZ_PI * radius * slant);
+  for (size_t i = 0; i < n_side; ++i) {
+    // Uniform surface density: pdf over t (0=base, 1=apex) proportional
+    // to the local radius (1-t)
+    const double t = 1.0 - std::sqrt(Uniform(0, 1));
+    const double r = radius * (1.0 - t);
+    const double th = Uniform(0, 2 * GZ_PI);
+    AddPoint(
+      pose,
+      {r * std::cos(th), r * std::sin(th), -length / 2 + t * length}, out);
+  }
+  const size_t n_base = CountFor(GZ_PI * radius * radius);
+  for (size_t i = 0; i < n_base; ++i) {
+    const double th = Uniform(0, 2 * GZ_PI);
+    const double r = radius * std::sqrt(Uniform(0, 1));
+    AddPoint(pose, {r * std::cos(th), r * std::sin(th), -length / 2}, out);
+  }
+}
+
+namespace
+{
+
+/// Ear-clipping triangulation of a simple (hole-free) polygon.
+/// Returns index triples into pts.
+std::vector<std::array<size_t, 3>> Triangulate(
+  std::vector<gz::math::Vector2d> pts)
+{
+  std::vector<std::array<size_t, 3>> tris;
+  // Ensure counter-clockwise order
+  double signed_area = 0;
+  for (size_t i = 0; i < pts.size(); ++i) {
+    const auto & a = pts[i];
+    const auto & b = pts[(i + 1) % pts.size()];
+    signed_area += a.X() * b.Y() - b.X() * a.Y();
+  }
+  std::vector<size_t> idx(pts.size());
+  for (size_t i = 0; i < idx.size(); ++i) {
+    idx[i] = signed_area >= 0 ? i : pts.size() - 1 - i;
+  }
+
+  auto cross = [&pts](size_t a, size_t b, size_t c) {
+      return (pts[b].X() - pts[a].X()) * (pts[c].Y() - pts[a].Y()) -
+             (pts[b].Y() - pts[a].Y()) * (pts[c].X() - pts[a].X());
+    };
+  auto inside = [&pts, &cross](size_t a, size_t b, size_t c, size_t p) {
+      return cross(a, b, p) >= 0 && cross(b, c, p) >= 0 &&
+             cross(c, a, p) >= 0;
+    };
+
+  size_t guard = 0;
+  while (idx.size() > 3 && guard++ < 10000) {
+    bool clipped = false;
+    for (size_t i = 0; i < idx.size(); ++i) {
+      const size_t prev = idx[(i + idx.size() - 1) % idx.size()];
+      const size_t cur = idx[i];
+      const size_t next = idx[(i + 1) % idx.size()];
+      if (cross(prev, cur, next) <= 0) {
+        continue;  // reflex vertex
+      }
+      bool ear = true;
+      for (size_t p : idx) {
+        if (p != prev && p != cur && p != next &&
+          inside(prev, cur, next, p))
+        {
+          ear = false;
+          break;
+        }
+      }
+      if (ear) {
+        tris.push_back({prev, cur, next});
+        idx.erase(idx.begin() + i);
+        clipped = true;
+        break;
+      }
+    }
+    if (!clipped) {
+      break;  // degenerate polygon; keep what we have
+    }
+  }
+  if (idx.size() == 3) {
+    tris.push_back({idx[0], idx[1], idx[2]});
+  }
+  return tris;
+}
+
+}  // namespace
+
+void Sampler::SamplePolyline(
+  const sdf::Geometry & geom, const gz::math::Pose3d & pose, CloudXYZ & out)
+{
+  for (const sdf::Polyline & poly : geom.PolylineShape()) {
+    const double height = poly.Height();
+    const auto & pts = poly.Points();
+    if (pts.size() < 3) {
+      continue;
+    }
+
+    // Extruded side walls (the outline is closed)
+    for (size_t i = 0; i < pts.size(); ++i) {
+      const auto & a = pts[i];
+      const auto & b = pts[(i + 1) % pts.size()];
+      const double len = (b - a).Length();
+      const size_t n = CountFor(len * height);
+      for (size_t k = 0; k < n; ++k) {
+        const double t = Uniform(0, 1);
+        AddPoint(
+          pose,
+          {a.X() + t * (b.X() - a.X()), a.Y() + t * (b.Y() - a.Y()),
+            Uniform(0, height)},
+          out);
+      }
+    }
+
+    // Top and bottom caps via triangulation
+    const auto tris = Triangulate(pts);
+    for (const auto & tri : tris) {
+      const auto & a = pts[tri[0]];
+      const auto & b = pts[tri[1]];
+      const auto & c = pts[tri[2]];
+      const double area = 0.5 * std::abs(
+        (b.X() - a.X()) * (c.Y() - a.Y()) -
+        (b.Y() - a.Y()) * (c.X() - a.X()));
+      for (double z : {0.0, height}) {
+        const size_t n = CountFor(area);
+        for (size_t k = 0; k < n; ++k) {
+          double u = Uniform(0, 1), v = Uniform(0, 1);
+          if (u + v > 1.0) {
+            u = 1.0 - u;
+            v = 1.0 - v;
+          }
+          AddPoint(
+            pose,
+            {a.X() + u * (b.X() - a.X()) + v * (c.X() - a.X()),
+              a.Y() + u * (b.Y() - a.Y()) + v * (c.Y() - a.Y()), z},
+            out);
+        }
+      }
+    }
+  }
+}
+
+bool Sampler::SampleHeightmap(
+  const sdf::Geometry & geom, const gz::math::Pose3d & pose, CloudXYZ & out)
+{
+  const sdf::Heightmap * hm = geom.HeightmapShape();
+  std::string declaring_dir;
+  if (!hm->FilePath().empty()) {
+    declaring_dir =
+      std::filesystem::path(hm->FilePath()).parent_path().string();
+  }
+  const std::string path = resolver_->Resolve(hm->Uri(), declaring_dir);
+  if (path.empty()) {
+    std::cerr << "[sdf2map] WARNING: could not resolve heightmap URI: "
+              << hm->Uri() << std::endl;
+    return false;
+  }
+
+  gz::common::Image image;
+  if (image.Load(path) != 0 || image.Width() < 2 || image.Height() < 2) {
+    std::cerr << "[sdf2map] WARNING: failed to load heightmap image "
+              << "(DEM/GeoTIFF is not supported yet): " << path << std::endl;
+    return false;
+  }
+
+  const unsigned int w = image.Width();
+  const unsigned int h = image.Height();
+  const gz::math::Vector3d size = hm->Size();
+  const gz::math::Vector3d offset = hm->Position();
+
+  // Normalized elevation grid; image row 0 maps to +y (viewed from above)
+  std::vector<double> z_grid(static_cast<size_t>(w) * h);
+  for (unsigned int r = 0; r < h; ++r) {
+    for (unsigned int c = 0; c < w; ++c) {
+      z_grid[static_cast<size_t>(r) * w + c] =
+        image.Pixel(c, r).R() * size.Z();
+    }
+  }
+  const double cell_x = size.X() / (w - 1);
+  const double cell_y = size.Y() / (h - 1);
+
+  // Weight cells by their true (sloped) surface area
+  std::vector<double> weights;
+  weights.reserve(static_cast<size_t>(w - 1) * (h - 1));
+  double total_area = 0;
+  for (unsigned int r = 0; r + 1 < h; ++r) {
+    for (unsigned int c = 0; c + 1 < w; ++c) {
+      const double z00 = z_grid[static_cast<size_t>(r) * w + c];
+      const double z10 = z_grid[static_cast<size_t>(r) * w + c + 1];
+      const double z01 = z_grid[static_cast<size_t>(r + 1) * w + c];
+      const double dzdx = (z10 - z00) / cell_x;
+      const double dzdy = (z01 - z00) / cell_y;
+      const double area = cell_x * cell_y *
+        std::sqrt(1.0 + dzdx * dzdx + dzdy * dzdy);
+      weights.push_back(area);
+      total_area += area;
+    }
+  }
+  std::discrete_distribution<size_t> pick(weights.begin(), weights.end());
+
+  const size_t n = CountFor(total_area);
+  for (size_t i = 0; i < n; ++i) {
+    const size_t cell = pick(rng_);
+    const unsigned int r = cell / (w - 1);
+    const unsigned int c = cell % (w - 1);
+    const double fx = Uniform(0, 1), fy = Uniform(0, 1);
+    // Bilinear interpolation inside the cell
+    const double z00 = z_grid[static_cast<size_t>(r) * w + c];
+    const double z10 = z_grid[static_cast<size_t>(r) * w + c + 1];
+    const double z01 = z_grid[static_cast<size_t>(r + 1) * w + c];
+    const double z11 = z_grid[static_cast<size_t>(r + 1) * w + c + 1];
+    const double z = z00 * (1 - fx) * (1 - fy) + z10 * fx * (1 - fy) +
+      z01 * (1 - fx) * fy + z11 * fx * fy;
+    // Image row 0 = +y edge, growing r moves toward -y
+    const double x = -size.X() / 2 + (c + fx) * cell_x;
+    const double y = size.Y() / 2 - (r + fy) * cell_y;
+    AddPoint(pose, offset + gz::math::Vector3d(x, y, z), out);
+  }
+  return true;
 }
 
 bool Sampler::SampleMesh(

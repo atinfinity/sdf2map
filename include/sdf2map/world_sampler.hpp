@@ -14,6 +14,7 @@ struct SampleStats
   std::size_t models{0};
   std::size_t geometries{0};
   std::size_t skipped{0};
+  std::size_t excluded_models{0};
 };
 
 /// Load the SDF world/model file named in opts.input and sample every

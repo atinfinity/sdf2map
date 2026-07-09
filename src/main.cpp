@@ -31,6 +31,10 @@ void PrintUsage()
     "  --z-min <m>             crop PCD points below this height\n"
     "  --z-max <m>             crop PCD points above this height\n"
     "  --exclude-ground        skip plane geometries (ground planes)\n"
+    "  --exclude <regex>       skip models whose name matches (repeatable,\n"
+    "                          e.g. --exclude 'person|actor')\n"
+    "  --transparency-threshold <t>  skip visuals with transparency >= t\n"
+    "                          in visual mode (default: 0.95)\n"
     "  --ascii                 write ASCII PCD instead of binary\n"
     "  --seed <n>              random seed (default: 42)\n\n"
     "Occupancy grid options:\n"
@@ -43,7 +47,9 @@ void PrintUsage()
     "  --grid-bounds <full|slice>  grid extent from the full cloud\n"
     "                          (default) or the obstacle slice only\n"
     "  --grid-margin <m>       extra margin around slice bounds\n"
-    "                          (default: 1.0, used with --grid-bounds slice)\n";
+    "                          (default: 1.0, used with --grid-bounds slice)\n"
+    "  --grid-close <n>        morphological closing radius in cells to\n"
+    "                          fill speckle holes; 0 disables (default: 1)\n";
 }
 
 }  // namespace
@@ -96,6 +102,10 @@ int main(int argc, char ** argv)
         opts.z_max = std::stod(next());
       } else if (arg == "--exclude-ground") {
         opts.exclude_ground = true;
+      } else if (arg == "--exclude") {
+        opts.exclude_patterns.push_back(next());
+      } else if (arg == "--transparency-threshold") {
+        opts.transparency_threshold = std::stod(next());
       } else if (arg == "--ascii") {
         opts.ascii_pcd = true;
       } else if (arg == "--verbose") {
@@ -121,6 +131,8 @@ int main(int argc, char ** argv)
         }
       } else if (arg == "--grid-margin") {
         opts.grid_bounds_margin = std::stod(next());
+      } else if (arg == "--grid-close") {
+        opts.grid_close = std::stoi(next());
       } else {
         std::cerr << "Unknown option: " << arg << "\n\n";
         PrintUsage();
@@ -150,6 +162,9 @@ int main(int argc, char ** argv)
               << " models";
     if (stats.skipped > 0) {
       std::cout << " (" << stats.skipped << " geometries skipped)";
+    }
+    if (stats.excluded_models > 0) {
+      std::cout << " (" << stats.excluded_models << " models excluded)";
     }
     std::cout << std::endl;
 

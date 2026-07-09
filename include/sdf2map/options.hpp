@@ -27,6 +27,12 @@ struct Options
   double z_max{std::numeric_limits<double>::infinity()};
   // Skip plane geometries (ground)
   bool exclude_ground{false};
+  // Skip whole models whose (possibly nested) name matches any of these
+  // ECMAScript regexes (regex_search semantics)
+  std::vector<std::string> exclude_patterns;
+  // Visuals with transparency >= this are skipped in --geometry visual
+  // mode (glass etc. that a lidar would not return)
+  double transparency_threshold{0.95};
   bool ascii_pcd{false};
   unsigned int seed{42};
   // Print resolved world poses of every model/link while sampling
@@ -44,6 +50,9 @@ struct Options
   // planes), padded by grid_bounds_margin.
   bool grid_bounds_slice{false};
   double grid_bounds_margin{1.0};
+  // Morphological closing radius in cells applied to occupied cells;
+  // fills speckle holes left by stochastic sampling. 0 disables.
+  int grid_close{1};
 };
 
 }  // namespace sdf2map

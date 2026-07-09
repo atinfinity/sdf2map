@@ -74,6 +74,140 @@ TEST(WorldSampler, PoseCompositionIsParentTimesChild)
   EXPECT_NEAR(max_z, 1.0, 0.01);
 }
 
+namespace
+{
+
+std::filesystem::path WriteTempWorld(
+  const std::string & name, const std::string & content)
+{
+  const auto path = std::filesystem::temp_directory_path() / name;
+  std::ofstream out(path);
+  out << content;
+  return path;
+}
+
+constexpr const char kTwoBoxWorld[] = R"(<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="t">
+    <model name="keep_box">
+      <static>true</static>
+      <pose>0 0 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>1 1 1</size></box></geometry></collision>
+        <visual name="v"><geometry><box><size>1 1 1</size></box></geometry></visual>
+      </link>
+    </model>
+    <model name="person_walking">
+      <static>true</static>
+      <pose>5 0 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="c"><geometry><box><size>1 1 1</size></box></geometry></collision>
+        <visual name="v">
+          <transparency>1.0</transparency>
+          <geometry><box><size>1 1 1</size></box></geometry>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>
+)";
+
+size_t CountNear(const sdf2map::CloudXYZ & cloud, float x0)
+{
+  size_t n = 0;
+  for (const auto & p : cloud) {
+    n += std::abs(p.x - x0) < 1.0 ? 1 : 0;
+  }
+  return n;
+}
+
+}  // namespace
+
+TEST(WorldSampler, ExcludeByNamePattern)
+{
+  const auto path = WriteTempWorld("sdf2map_exclude_test.sdf", kTwoBoxWorld);
+  sdf2map::Options opts;
+  opts.input = path.string();
+  opts.density = 200.0;
+  opts.exclude_patterns = {"person.*"};
+  sdf2map::SampleStats stats;
+  const auto cloud = sdf2map::SampleWorld(opts, stats);
+  std::filesystem::remove(path);
+
+  EXPECT_EQ(stats.excluded_models, 1u);
+  EXPECT_GT(CountNear(*cloud, 0.0f), 500u);
+  EXPECT_EQ(CountNear(*cloud, 5.0f), 0u);
+}
+
+TEST(WorldSampler, TransparentVisualSkipped)
+{
+  const auto path = WriteTempWorld("sdf2map_transp_test.sdf", kTwoBoxWorld);
+  sdf2map::Options opts;
+  opts.input = path.string();
+  opts.density = 200.0;
+  opts.use_visual = true;
+  sdf2map::SampleStats stats;
+  const auto cloud = sdf2map::SampleWorld(opts, stats);
+
+  EXPECT_GT(CountNear(*cloud, 0.0f), 500u);
+  EXPECT_EQ(CountNear(*cloud, 5.0f), 0u);  // transparency 1.0 -> skipped
+  EXPECT_EQ(stats.skipped, 1u);
+
+  // Collision mode is unaffected by transparency
+  sdf2map::Options copts = opts;
+  copts.use_visual = false;
+  sdf2map::SampleStats cstats;
+  const auto ccloud = sdf2map::SampleWorld(copts, cstats);
+  std::filesystem::remove(path);
+  EXPECT_GT(CountNear(*ccloud, 5.0f), 500u);
+}
+
+TEST(WorldSampler, HeightmapConeHill)
+{
+  // cone_hill.png: normalized height 1 - r/R, radial. size 10x10x2 ->
+  // z(r) = 2 * (1 - r/5) for r < 5 m
+  const std::string world = std::string(R"(<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="t">
+    <model name="terrain">
+      <static>true</static>
+      <link name="link">
+        <collision name="c">
+          <geometry>
+            <heightmap>
+              <uri>)") + TEST_WORLDS_DIR + R"(/heightmaps/cone_hill.png</uri>
+              <size>10 10 2</size>
+              <pos>0 0 0</pos>
+            </heightmap>
+          </geometry>
+        </collision>
+      </link>
+    </model>
+  </world>
+</sdf>
+)";
+  const auto path = WriteTempWorld("sdf2map_heightmap_test.sdf", world);
+  sdf2map::Options opts;
+  opts.input = path.string();
+  opts.density = 100.0;
+  sdf2map::SampleStats stats;
+  const auto cloud = sdf2map::SampleWorld(opts, stats);
+  std::filesystem::remove(path);
+
+  ASSERT_GT(cloud->size(), 5000u);
+  EXPECT_EQ(stats.geometries, 1u);
+  float max_z = 0;
+  for (const auto & p : *cloud) {
+    ASSERT_LE(std::abs(p.x), 5.001f);
+    ASSERT_LE(std::abs(p.y), 5.001f);
+    const double r = std::hypot(p.x, p.y);
+    const double expected = 2.0 * std::max(0.0, 1.0 - r / 5.0);
+    ASSERT_NEAR(p.z, expected, 0.06);
+    max_z = std::max(max_z, p.z);
+  }
+  EXPECT_GT(max_z, 1.8f);  // the summit is represented
+}
+
 int main(int argc, char ** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
