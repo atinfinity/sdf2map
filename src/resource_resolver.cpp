@@ -58,7 +58,13 @@ std::string UrlDecode(const std::string & in)
 {
   std::string out;
   for (size_t i = 0; i < in.size(); ++i) {
-    if (in[i] == '%' && i + 2 < in.size()) {
+    // Decode %XX only for two valid hex digits; anything else (including
+    // malformed sequences like "%zz") is copied through literally so a
+    // broken URI never aborts the conversion.
+    if (in[i] == '%' && i + 2 < in.size() &&
+      std::isxdigit(static_cast<unsigned char>(in[i + 1])) &&
+      std::isxdigit(static_cast<unsigned char>(in[i + 2])))
+    {
       out += static_cast<char>(std::stoi(in.substr(i + 1, 2), nullptr, 16));
       i += 2;
     } else {

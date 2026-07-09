@@ -79,6 +79,8 @@ if(BUILD_TESTING)
     TEST_WORLDS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/worlds")
   ament_add_gtest(test_exporter test/test_exporter.cpp)
   target_link_libraries(test_exporter sdf2map_core)
+  ament_add_gtest(test_resource_resolver test/test_resource_resolver.cpp)
+  target_link_libraries(test_resource_resolver sdf2map_core)
   ament_add_gtest(test_e2e_geometry test/test_e2e_geometry.cpp)
   target_link_libraries(test_e2e_geometry sdf2map_core)
   target_compile_definitions(test_e2e_geometry PRIVATE
