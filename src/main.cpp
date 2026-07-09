@@ -1,3 +1,17 @@
+// Copyright 2026 atinfinity
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -5,6 +19,7 @@
 
 #include "sdf2map/exporter.hpp"
 #include "sdf2map/options.hpp"
+#include "sdf2map/publisher.hpp"
 #include "sdf2map/world_sampler.hpp"
 
 namespace
@@ -36,7 +51,13 @@ void PrintUsage()
     "  --transparency-threshold <t>  skip visuals with transparency >= t\n"
     "                          in visual mode (default: 0.95)\n"
     "  --ascii                 write ASCII PCD instead of binary\n"
-    "  --seed <n>              random seed (default: 42)\n\n"
+    "  --seed <n>              random seed (default: 42)\n"
+    "  --no-download           do not download missing Fuel models\n"
+    "  --publish               publish the cloud as PointCloud2 on\n"
+    "                          /sdf2map/map_cloud and spin (RViz preview)\n"
+    "  --verbose               print resolved model poses\n\n"
+    "Actors (<actor> animated entities) are intentionally ignored: they\n"
+    "are dynamic objects that do not belong in a localization map.\n\n"
     "Occupancy grid options:\n"
     "  --occupancy-grid <file.yaml>  also write a Nav2 map (YAML + PGM)\n"
     "  --grid-resolution <m>   grid cell size (default: 0.05)\n"
@@ -110,6 +131,10 @@ int main(int argc, char ** argv)
         opts.ascii_pcd = true;
       } else if (arg == "--verbose") {
         opts.verbose = true;
+      } else if (arg == "--no-download") {
+        opts.download = false;
+      } else if (arg == "--publish") {
+        opts.publish = true;
       } else if (arg == "--seed") {
         opts.seed = static_cast<unsigned int>(std::stoul(next()));
       } else if (arg == "--occupancy-grid") {
@@ -174,6 +199,9 @@ int main(int argc, char ** argv)
 
     if (!opts.grid_yaml.empty()) {
       sdf2map::ExportOccupancyGrid(*cloud, opts);
+    }
+    if (opts.publish) {
+      sdf2map::PublishCloud(*cloud, argc, argv);
     }
   } catch (const std::exception & e) {
     std::cerr << "[sdf2map] ERROR: " << e.what() << std::endl;

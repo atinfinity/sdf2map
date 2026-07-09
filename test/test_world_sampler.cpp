@@ -1,3 +1,17 @@
+// Copyright 2026 atinfinity
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -13,7 +27,8 @@ namespace
 // A yaw-rotated collision under a translated model: if pose composition
 // order is wrong, the model translation gets rotated and the box lands
 // near (-5, 10) instead of (10, 5).
-constexpr const char kWorld[] = R"(<?xml version="1.0"?>
+constexpr const char kWorld[] =
+  R"(<?xml version="1.0"?>
 <sdf version="1.9">
   <world name="t">
     <model name="offset_rotated">
@@ -86,7 +101,8 @@ std::filesystem::path WriteTempWorld(
   return path;
 }
 
-constexpr const char kTwoBoxWorld[] = R"(<?xml version="1.0"?>
+constexpr const char kTwoBoxWorld[] =
+  R"(<?xml version="1.0"?>
 <sdf version="1.9">
   <world name="t">
     <model name="keep_box">
@@ -166,7 +182,9 @@ TEST(WorldSampler, HeightmapConeHill)
 {
   // cone_hill.png: normalized height 1 - r/R, radial. size 10x10x2 ->
   // z(r) = 2 * (1 - r/5) for r < 5 m
-  const std::string world = std::string(R"(<?xml version="1.0"?>
+  const std::string world =
+    std::string(
+    R"(<?xml version="1.0"?>
 <sdf version="1.9">
   <world name="t">
     <model name="terrain">
@@ -175,7 +193,10 @@ TEST(WorldSampler, HeightmapConeHill)
         <collision name="c">
           <geometry>
             <heightmap>
-              <uri>)") + TEST_WORLDS_DIR + R"(/heightmaps/cone_hill.png</uri>
+              <uri>)")
+    +
+    TEST_WORLDS_DIR +
+    R"(/heightmaps/cone_hill.png</uri>
               <size>10 10 2</size>
               <pos>0 0 0</pos>
             </heightmap>

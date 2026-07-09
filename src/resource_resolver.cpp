@@ -1,10 +1,27 @@
+// Copyright 2026 atinfinity
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "sdf2map/resource_resolver.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
+#include <iostream>
 #include <sstream>
+
+#include <gz/fuel_tools/Interface.hh>
 
 namespace fs = std::filesystem;
 
@@ -76,8 +93,9 @@ std::string HighestVersion(const fs::path & model_dir)
 }  // namespace
 
 ResourceResolver::ResourceResolver(
-  const std::string & base_dir, const std::vector<std::string> & extra_dirs)
-: base_dir_(base_dir)
+  const std::string & base_dir, const std::vector<std::string> & extra_dirs,
+  bool download)
+: base_dir_(base_dir), download_(download)
 {
   search_dirs_ = extra_dirs;
   for (const char * env :
@@ -187,7 +205,33 @@ std::string ResourceResolver::ResolveFuelUrl(const std::string & uri) const
   for (; idx < segments.size(); ++idx) {
     sub_path += (sub_path.empty() ? "" : "/") + segments[idx];
   }
-  return FindInFuelCache(model_name, version, sub_path);
+  std::string found = FindInFuelCache(model_name, version, sub_path);
+  if (!found.empty() || !download_) {
+    return found;
+  }
+
+  // Cache miss: download the whole model to the Fuel cache, then retry.
+  const std::string base_uri = uri.substr(0, scheme_end + 3) +
+    rest.substr(0, models_pos + 8) + model_name;
+  if (!download_attempts_.insert(Lower(base_uri)).second) {
+    return std::string();  // already tried and failed
+  }
+  std::cerr << "[sdf2map] downloading " << base_uri << " ..." << std::endl;
+  const std::string fetched = gz::fuel_tools::fetchResource(base_uri);
+  if (fetched.empty()) {
+    std::cerr << "[sdf2map] WARNING: download failed: " << base_uri
+              << std::endl;
+    return std::string();
+  }
+  if (sub_path.empty()) {
+    return fetched;
+  }
+  found = FindInFuelCache(model_name, version, sub_path);
+  if (!found.empty()) {
+    return found;
+  }
+  fs::path candidate = fs::path(fetched) / sub_path;
+  return fs::exists(candidate) ? candidate.string() : std::string();
 }
 
 std::string ResourceResolver::FindInFuelCache(

@@ -1,30 +1,42 @@
 # sdf2map
 
-Gazebo (Harmonic) の SDF world ファイルを読み込み、NDT 自己位置推定用の
-3D 点群地図 (PCD) と Nav2 用の 2D 占有格子地図 (PGM + YAML) を生成する
-オフライン変換ツールです。ROS 2 Jazzy 対応。
+[![CI](https://github.com/atinfinity/sdf2map/actions/workflows/ci.yml/badge.svg)](https://github.com/atinfinity/sdf2map/actions/workflows/ci.yml)
 
-Gazebo を起動せず、libsdformat14 で world をパースして各ジオメトリの
-表面を一様密度でサンプリングします。点密度が距離に依存せず、
-オクルージョンによる抜けもないため、NDT のボクセル統計に適した
-地図が得られます。
+*[日本語版 README はこちら](README.ja.md)*
 
-## 対応ジオメトリ
+An offline converter that reads Gazebo (Harmonic) SDF world files and
+generates 3D point cloud maps (PCD) for NDT localization and 2D occupancy
+grid maps (PGM + YAML) for Nav2. Built for ROS 2 Jazzy.
+
+Instead of launching Gazebo, sdf2map parses the world with libsdformat14
+and samples every geometry surface at a uniform density. The resulting
+maps have distance-independent point density and no occlusion holes,
+which keeps NDT voxel statistics well conditioned. NDT usability is
+guarded by an automated registration test, and was confirmed on a real
+warehouse world (9.5 mm position error from a 0.5 m / 8.6° initial
+offset).
+
+## Supported geometry
 
 - box / cylinder / sphere / capsule / ellipsoid / cone / plane
-- polyline (押し出し形状 — 凹多角形も ear clipping で対応)
-- mesh (DAE / OBJ / STL — gz-common MeshManager 経由、`<scale>` /
-  `<submesh>` 対応)
-- heightmap (グレースケール画像。傾斜を考慮した面積均一サンプリング。
-  DEM / GeoTIFF は未対応)
-- `<include>`・ネストモデル・`//pose[@relative_to]`・`<frame>` は
-  libsdformat の SemanticPose で解決
+- polyline (extruded polygon; concave outlines handled via ear clipping)
+- mesh (DAE / OBJ / STL through the gz-common MeshManager; `<scale>` and
+  `<submesh>` supported)
+- heightmap (grayscale images, slope-corrected uniform surface sampling;
+  DEM / GeoTIFF not supported yet)
+- `<include>`, nested models, `//pose[@relative_to]` and `<frame>` are
+  resolved with libsdformat's SemanticPose
 
-メッシュ URI は `model://` (GZ_SIM_RESOURCE_PATH 等 → Fuel キャッシュ
-`~/.gz/fuel` の順に探索)、`file://`、絶対パス、SDF ファイルからの
-相対パスを解決します。
+`model://` URIs are resolved through `--model-path`,
+`GZ_SIM_RESOURCE_PATH` (and related environment variables), then the
+Fuel cache (`~/.gz/fuel`). Missing Fuel models are downloaded
+automatically (disable with `--no-download`).
 
-## ビルド
+Actors (`<actor>` animated entities) are **intentionally ignored**: they
+are dynamic objects and do not belong in a static localization map. A
+note is printed when a world contains actors.
+
+## Build
 
 ```bash
 cd ~/dev_ws
@@ -32,7 +44,7 @@ colcon build --packages-select sdf2map
 source install/setup.bash
 ```
 
-## 使い方
+## Usage
 
 ```bash
 ros2 run sdf2map sdf2map \
@@ -42,51 +54,62 @@ ros2 run sdf2map sdf2map \
   --occupancy-grid map.yaml
 ```
 
-### 主なオプション
+### Options
 
-| オプション | 既定値 | 説明 |
+| Option | Default | Description |
 |---|---|---|
-| `--density <n>` | 400 | 表面サンプリング密度 [points/m²] |
-| `--geometry <collision\|visual>` | collision | サンプリング対象のジオメトリ |
-| `--voxel <m>` | 0 (無効) | PCD 出力の VoxelGrid リーフサイズ |
-| `--z-min` / `--z-max <m>` | 無制限 | PCD 出力の高さクロップ |
-| `--exclude-ground` | off | plane ジオメトリ (地面) を除外 |
-| `--exclude <regex>` | なし | 名前が一致するモデルを除外 (複数指定可) |
-| `--transparency-threshold <t>` | 0.95 | visual モードで透明度がこれ以上の visual を除外 |
-| `--model-path <dirs>` | なし | `model://` の追加検索パス (コロン区切り・複数可) |
-| `--ascii` | off | PCD を ASCII 形式で出力 |
-| `--seed <n>` | 42 | 乱数シード (出力は決定的) |
-| `--occupancy-grid <file.yaml>` | なし | Nav2 地図 (YAML+PGM) も出力 |
-| `--grid-resolution <m>` | 0.05 | 格子セルサイズ |
-| `--slice-z-min` / `--slice-z-max <m>` | 0.1 / 1.8 | 障害物とみなす高さ帯 |
-| `--grid-bounds <full\|slice>` | full | 格子範囲を全点群から取るか障害物帯のみから取るか |
-| `--grid-margin <m>` | 1.0 | `--grid-bounds slice` 時の外周マージン |
-| `--grid-close <n>` | 1 | 障害物セルのモルフォロジークロージング半径 (0で無効) |
-| `--verbose` | off | 各モデルの解決済み world pose を表示 |
+| `--density <n>` | 400 | surface sampling density [points/m²] |
+| `--geometry <collision\|visual>` | collision | which geometry to sample |
+| `--voxel <m>` | 0 (off) | VoxelGrid leaf size for the PCD output |
+| `--z-min` / `--z-max <m>` | unlimited | height crop for the PCD output |
+| `--exclude-ground` | off | skip plane geometries (ground) |
+| `--exclude <regex>` | none | skip models by name (repeatable) |
+| `--transparency-threshold <t>` | 0.95 | skip visuals with transparency ≥ t in visual mode |
+| `--model-path <dirs>` | none | extra `model://` search paths (colon-separated, repeatable) |
+| `--no-download` | off | do not download missing Fuel models |
+| `--ascii` | off | write ASCII PCD |
+| `--seed <n>` | 42 | random seed (output is deterministic) |
+| `--publish` | off | publish the cloud on `/sdf2map/map_cloud` (latched) for RViz |
+| `--verbose` | off | print resolved world poses per model |
 
-占有格子は指定高さ帯の点をセルに投影して障害物とし、地図範囲内の
-残りセルは free とします (ジオメトリ既知のため unknown は生成しません)。
-100×100m の ground plane を持つ world では `--grid-bounds slice` を
-使うと障害物範囲+マージンのコンパクトな地図になります。
+### Occupancy grid options
 
-## 実運用のヒント
+| Option | Default | Description |
+|---|---|---|
+| `--occupancy-grid <file.yaml>` | none | also write a Nav2 map (YAML + PGM) |
+| `--grid-resolution <m>` | 0.05 | grid cell size |
+| `--slice-z-min` / `--slice-z-max <m>` | 0.1 / 1.8 | obstacle height band |
+| `--grid-bounds <full\|slice>` | full | grid extent from the full cloud or the obstacle band only |
+| `--grid-margin <m>` | 1.0 | margin around slice bounds |
+| `--grid-close <n>` | 1 | morphological closing radius for obstacle cells (0 disables) |
 
-- **collision が床 plane 1 枚だけの world がある** (例: Fuel の Depot
-  モデル)。地図が空になる場合は `--geometry visual` を使ってください。
-  visual には屋根も含まれるので、必要なら `--z-max` でクロップします。
-- `model://` の解決には `GZ_SIM_RESOURCE_PATH` を設定するか
-  `--model-path` を指定してください (モデルディレクトリの親を指定)。
-- 人物などの動的オブジェクトは `--exclude 'Person|MaleVisitor'` の
-  ように名前パターンで地図から除外できます。
-- Fuel モデルは事前に `gz fuel download -u <URL>` でキャッシュへ
-  ダウンロードしておく必要があります (本ツールは自動ダウンロード
-  しません)。未解決の include は SDF エラーとして表示されます。
+The grid marks cells hit by points inside the height band as occupied and
+every other in-bounds cell as free (the geometry is fully known, so no
+unknown cells are produced). For worlds with a huge ground plane, use
+`--grid-bounds slice` to get a compact map around the obstacles.
 
-## テスト
+## Practical notes
+
+- **Some worlds only have a floor plane as collision** (e.g. the Fuel
+  Depot model — its walls and shelves are visual-only). If the map comes
+  out empty, use `--geometry visual`, optionally with `--z-max` to crop
+  the roof.
+- Dynamic objects such as persons can be removed with
+  `--exclude 'Person|MaleVisitor'`.
+- The output is deterministic for a given `--seed`.
+
+## Tests
 
 ```bash
 colcon test --packages-select sdf2map && colcon test-result --verbose
 ```
 
-サンプル world (`worlds/test_world.sdf`) には全プリミティブ・メッシュ・
-ネストモデル・relative_to フレームが含まれており、動作確認に使えます。
+The suite covers per-geometry samplers, pose-composition regressions,
+an end-to-end geometric check of `worlds/test_world.sdf`, occupancy-grid
+closing, and an NDT registration check that recovers a known sensor pose
+on the generated map. Linters (uncrustify, cpplint, lint_cmake) run as
+part of the tests.
+
+## License
+
+Apache-2.0

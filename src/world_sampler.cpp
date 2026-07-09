@@ -1,3 +1,17 @@
+// Copyright 2026 atinfinity
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #include "sdf2map/world_sampler.hpp"
 
 #include <filesystem>
@@ -127,7 +141,7 @@ CloudXYZ::Ptr SampleWorld(const Options & opts, SampleStats & stats)
 {
   const std::string base_dir =
     std::filesystem::absolute(opts.input).parent_path().string();
-  ResourceResolver resolver(base_dir, opts.model_paths);
+  ResourceResolver resolver(base_dir, opts.model_paths, opts.download);
 
   sdf::ParserConfig config = sdf::ParserConfig::GlobalConfig();
   config.SetFindCallback(
@@ -155,6 +169,13 @@ CloudXYZ::Ptr SampleWorld(const Options & opts, SampleStats & stats)
     if (root.WorldCount() > 1) {
       std::cerr << "[sdf2map] NOTE: file contains " << root.WorldCount()
                 << " worlds, using the first: " << world->Name() << std::endl;
+    }
+    if (world->ActorCount() > 0) {
+      // By design: actors are animated (dynamic) entities and must not
+      // appear in a static localization map.
+      std::cout << "[sdf2map] NOTE: ignoring " << world->ActorCount()
+                << " actor(s); actors are dynamic and never mapped"
+                << std::endl;
     }
     for (uint64_t i = 0; i < world->ModelCount(); ++i) {
       world_sampler.ProcessModel(

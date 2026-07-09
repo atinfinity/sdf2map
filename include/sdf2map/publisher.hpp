@@ -12,30 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef SDF2MAP__WORLD_SAMPLER_HPP_
-#define SDF2MAP__WORLD_SAMPLER_HPP_
+#ifndef SDF2MAP__PUBLISHER_HPP_
+#define SDF2MAP__PUBLISHER_HPP_
 
-#include <cstddef>
-
-#include "sdf2map/options.hpp"
-#include "sdf2map/samplers.hpp"
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 
 namespace sdf2map
 {
 
-struct SampleStats
-{
-  std::size_t models{0};
-  std::size_t geometries{0};
-  std::size_t skipped{0};
-  std::size_t excluded_models{0};
-};
-
-/// Load the SDF world/model file named in opts.input and sample every
-/// collision (or visual) geometry into one cloud in world coordinates.
-/// Throws std::runtime_error on load failure.
-CloudXYZ::Ptr SampleWorld(const Options & opts, SampleStats & stats);
+/// Publish the cloud once on /sdf2map/map_cloud (frame "map", transient
+/// local QoS so RViz can late-subscribe) and spin until Ctrl-C.
+void PublishCloud(
+  const pcl::PointCloud<pcl::PointXYZ> & cloud, int argc, char ** argv);
 
 }  // namespace sdf2map
 
-#endif  // SDF2MAP__WORLD_SAMPLER_HPP_
+#endif  // SDF2MAP__PUBLISHER_HPP_
